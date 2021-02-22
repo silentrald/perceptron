@@ -1,0 +1,152 @@
+#include <algorithm>
+#include <fstream>
+#include <sstream>
+#include <random>
+#include <vector>
+#include <stdio.h>
+#include <time.h>
+#include "./include/perceptron.h"
+
+struct Data {
+    int label;
+    double diameter;
+    double weight;
+    double red;
+    double green;
+    double blue;
+};
+
+int main() {
+    srand(time(NULL));
+    srand48(time(NULL));
+
+    Perceptron perceptron(5);
+    // perceptron.randomize_weights();
+    perceptron.zero_weights();
+
+    // load dataset
+    std::string line;
+    std::ifstream fs("dataset/citrus.csv");
+
+    if (!fs.is_open()) {
+        printf("File could not be opened\n");
+        return 1;
+    }
+
+    // skip the first line
+    getline(fs, line);
+
+    std::vector<Data> dataset;
+    std::string token;
+    int label;
+    double diameter, weight, red, green, blue;
+
+    while (getline(fs, line)) {
+        std::stringstream ss(line);
+
+        std::getline(ss, token, ',');
+        label = token == "orange" ? 1 : -1;
+
+        std::getline(ss, token, ',');
+        diameter = atof(token.c_str());
+
+        std::getline(ss, token, ',');
+        weight = atof(token.c_str());
+
+        std::getline(ss, token, ',');
+        red = atof(token.c_str());
+
+        std::getline(ss, token, ',');
+        green = atof(token.c_str());
+
+        std::getline(ss, token, ',');
+        blue = atof(token.c_str());
+
+        Data data;
+        data.label = label;
+        data.diameter = diameter;
+        data.weight = weight;
+        data.red = red;
+        data.green = green;
+        data.blue = blue;
+
+        dataset.push_back(data);
+    }
+    fs.close();
+
+    random_shuffle(dataset.begin(), dataset.end());
+    random_shuffle(dataset.begin(), dataset.end());
+    random_shuffle(dataset.begin(), dataset.end());
+
+    // Split to train and test
+    // 90% train 10% test
+    int size = dataset.size();
+    int train_size = size * 0.80;
+    int test_size = size - train_size;
+
+    // Train
+    Data data;
+    for (int i = 0; i < train_size; i++) {
+        data = dataset[i];
+
+        perceptron.train({
+            data.diameter,
+            data.weight,
+            data.red,
+            data.green,
+            data.blue
+        }, data.label);
+    }
+
+    std::vector<std::vector<int>> confusion_matrix = {
+        { 0, 0, 0 },
+        { 0, 0, 0 },
+        { 0, 0, 0 },
+    };
+
+    int guess;
+    for (int i = 0; i < test_size; i++) {
+        data = dataset[i + train_size];
+
+        guess = perceptron.predict({
+            data.diameter,
+            data.weight,
+            data.red,
+            data.green,
+            data.blue
+        });
+        
+        int r = guess > 0 ? 0 : 1;
+        int c = data.label > 0 ? 0 : 1;
+        confusion_matrix[r][c]++;
+    }
+
+    int sum;
+    for (int r = 0; r < 2; r++) {
+        sum = 0;
+        for (int c = 0; c < 2; c++) {
+            sum += confusion_matrix[r][c];
+        }
+        confusion_matrix[r][2] = sum;
+    }
+
+    for (int c = 0; c < 2; c++) {
+        sum = 0;
+        for (int r = 0; r < 2; r++) {
+            sum += confusion_matrix[r][c];
+        }
+        confusion_matrix[2][c] = sum;
+    }
+
+    confusion_matrix[2][2] = test_size;
+
+    printf("Confusion Matrix\n");
+    for (int r = 0; r < 3; r++) {
+        for (int c = 0; c < 3; c++) {
+            printf("%5d", confusion_matrix[r][c]);
+        }
+        printf("\n");
+    }
+
+    perceptron.to_file();
+}
